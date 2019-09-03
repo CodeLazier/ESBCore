@@ -1,0 +1,29 @@
+General:
+  Log:
+    path: ./log
+    #single log file max size(M),0 is Infinity size until fill disk
+    size: 100
+    #maximum number of days to retain old log files based on the timestamp encoded in their filename
+    #0 is preserve forever
+    saveDays: 200
+    #0 Debug,1 Info,2 Warn,3 Error,4 Panic
+    level: 0
+
+  CmdQueue:
+    #支援AMQP,Redis
+    #redis协议地址
+    broker: redis://localhost:6379
+    #持久化后端,支援Redis,Memcache,MongoDB
+    backend: redis://localhost:6379
+    #结果保存在後端的時間
+    resultsExpireIn: 1
+  Worker:
+    #並行執行數
+    concurrency: 3
+    #當前Tag
+    tag: NT_Worker
+
+  #調用外部接口規範
+  Caller:
+    #啟用SSL安全連接
+    TLS:

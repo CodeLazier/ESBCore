@@ -1,0 +1,42 @@
+Rpc:
+  #伺服发现设置
+  #0 etcd,1 singleServer
+  RegisterServer:
+    #本機註冊,需與NTAgent保持一致
+    addr: 0.0.0.0:6989
+    #註冊進etcd,如果希望啟用的話
+    etcdAddrs: [127.0.0.1:2379] #[127.0.0.1:2379,192.168.1.1:2379]
+    #enable Metrics ex: 127.0.0.1:2003
+    graphiteAddr:
+
+    TLS:
+      #Ex ./server.pem
+      certFile:
+      #Ex ./server.key
+      keyFile:
+
+General:
+  Log:
+    path: ./log
+    #single log file max size(M),0 is Infinity size until fill disk
+    size: 100
+    #maximum number of days to retain old log files based on the timestamp encoded in their filename
+    #0 is preserve forever
+    saveDays: 200
+    #0 Debug,1 Info,2 Warn,3 Error,4 Panic
+    level: 0
+
+  CmdQueue:
+    #支援AMQP,Redis
+    #redis协议地址
+    broker: redis://localhost:6379
+    #持久化后端,支援Redis,Memcache,MongoDB
+    backend: redis://localhost:6379
+
+  Leader:
+    tag: NT_Worker
+
+  Caller:
+    routing:
+      - Ex/Example/Call,12236
+      - sdf/sdf/sdf/er/er,4059845

@@ -1,0 +1,61 @@
+MQTTServer:
+  #tcp/ssl/ws
+  URI: tcp://127.0.0.1:1883
+  #Unique
+  clientId: ntagent_1
+  #Connection authorization
+  username: test
+  password: test2
+  #接受上次遗失的订阅,qos必须1或2
+  retain: true
+  #Client TLS settings,refer to the document for the server please.
+  TLS:
+    #Ex ./CAfile.pem
+    caFile:
+    #Ex ./client.pem
+    clientCert:
+    #Ex ./client.key
+    clientKey:
+
+Subscribe:
+  #auto refresh topic for sub,(seconds)
+  autoRefresh: 300
+  Topics:
+    #topic,qos(0/1/2),default 2
+    #可以用共享主题来负载平衡,格式 $share/A/NT/... $share/B/NT/...
+    - NT/Test/#,2
+    - NT/EDI/#,2
+    - NT/Sample/#
+    - Other/API/+,1
+    - Ex/Example/Call/#
+
+Rpc:
+  #伺服发现设置 ntleader
+  #0 etcd,1 multServers,2 singleServer
+  ServiceDiscovery:
+    category: 0 # SingleServer
+    addrs: [127.0.0.1:2379] # 對於SingleServer,僅第一個有效
+
+  #負載平衡算法,僅非SingleServer有效
+  Select:
+    #0 Random,1 Round,2 WeightedPing, 3 Hash,4 Closest
+    algorithm: 1 #Round,
+
+  #如果ntleader配置了ssl,則需要開啟
+  TLS:
+    enable: false
+
+
+General:
+  Log:
+    path: ./log
+    #single log file max size(M),0 is Infinity size until fill disk
+    size: 100
+    #maximum number of days to retain old log files based on the timestamp encoded in their filename
+    #0 is preserve forever
+    saveDays: 200
+    #0 Debug,1 Info,2 Warn,3 Error,4 Panic
+    level: 0
+
+
+

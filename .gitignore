@@ -1,0 +1,21 @@
+*.log
+.idea
+
+/redis
+/tools
+/cshape_test
+/doc
+/grpc
+/hivemq
+/motan
+/motan-go
+/mqtt
+/code
+
+
+
+# Executable may be added to repository
+*.exe
+*.sum
+*.mod
+*.lnk
