@@ -9,6 +9,7 @@ import (
 	//register
 	_ "common/work/calc"
 	_ "common/work/call"
+	_ "common/work/edi"
 	_ "common/work/sample"
 	_ "common/work/test"
 )

@@ -33,8 +33,8 @@ Rpc:
   #伺服发现设置 ntleader
   #0 etcd,1 multServers,2 singleServer
   ServiceDiscovery:
-    category: 0 # SingleServer
-    addrs: [127.0.0.1:2379] # 對於SingleServer,僅第一個有效
+    category: 2 # SingleServer
+    addrs: [127.0.0.1:6989] # 對於SingleServer,僅第一個有效
 
   #負載平衡算法,僅非SingleServer有效
   Select:
