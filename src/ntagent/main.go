@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -25,6 +26,7 @@ import (
 	RpcClient "github.com/smallnest/rpcx/client"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
+	"github.com/emicklei/go-restful"
 )
 
 type ServiceSelect struct {
@@ -331,6 +333,84 @@ func onMsgReceived(client MQTT.Client, message MQTT.Message) {
 	}()
 }
 
+func startServerAPI() {
+	wsContainer := restful.NewContainer()
+	u := UserResource{}
+	u.RegisterTo(wsContainer)
+
+	// Add container filter to enable CORS
+	cors := restful.CrossOriginResourceSharing{
+		ExposeHeaders:  []string{"X-My-Header"},
+		AllowedHeaders: []string{"Content-Type", "Accept"},
+		AllowedMethods: []string{"GET", "POST"},
+		CookiesAllowed: false,
+		Container:      wsContainer}
+	wsContainer.Filter(cors.Filter)
+
+	// Add container filter to respond to OPTIONS
+	wsContainer.Filter(wsContainer.OPTIONSFilter)
+
+	server := &http.Server{Addr: ":12396", Handler: wsContainer}
+	//defer server.Close()
+	//server.ListenAndServeTLS("","")
+	server.ListenAndServe()
+}
+
+type UserResource struct{}
+
+func (u UserResource) RegisterTo(container *restful.Container) {
+	ws := new(restful.WebService)
+	ws.
+		Path("/ESB").
+		Consumes("*/*").
+		Produces("*/*")
+
+
+	ws.Route(ws.POST("").To(u.requestAPIFunc))
+
+	container.Add(ws)
+}
+
+func (u UserResource) requestAPIFunc(request *restful.Request, response *restful.Response) {
+
+	topic:=""
+	body,err:=ioutil.ReadAll(request.Request.Body)
+	if err!=nil{
+		return
+	}
+	s:=string(body)
+	_=s
+	id := fastid.CommonConfig.GenInt64ID()
+	res:=&fundef.ResponseResult{}
+	//res, err := callRpcServer(&fundef.RequestParams{
+	//	ID:        id,
+	//	Topic:     topic,
+	//	TimeStamp: time.Now(),
+	//	Params:    string(body),
+	//}, 0)
+	res.ID=id
+	if err != nil {
+		logger.Error("Call RPC Server is Failed", zap.Int64("ID", id),
+			zap.String("Topic", topic),
+			zap.Error(err))
+	} else {
+		if res.Err != nil {
+			logger.Error("Response is error", zap.Error(res.Err))
+		} else {
+			logger.Debug("Call result is ", zap.Int64("RequestID", id), zap.Any("Response", res))
+		}
+	}
+	//bytes,err:=res.Marshal()
+	//if err!=nil{
+	//	return
+	//}
+	//writer.Write(bytes)
+	response.WriteHeaderAndJson(200,res,"application/json")
+	//response.ResponseWriter.Write(bytes)
+	//io.WriteString(response.ResponseWriter, "this would be a normal response")
+}
+
+
 func main() {
 	chanSignal := make(chan os.Signal, 1)
 	signal.Notify(chanSignal, os.Interrupt, syscall.SIGTERM)
@@ -342,6 +422,8 @@ func main() {
 
 	logger = helper.NewAdapterLogger(config.LogPath+"/ntagent.log", config.LogSize, config.LogMaxAge, config.LogLevel).Logger
 	defer logger.Sync()
+
+	startServerAPI()
 
 	//m,_:=helper.ParseJWT("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1ZSwiZXhwIjoxNTY1NzcyNDI1LCJuYW1lIjoidGVzdCJ9.2LwopohhuBDUo1i-jiK4YLnapUVqQi5XDVK57eBH2QQ")
 	//fmt.Println(m)

@@ -43,7 +43,6 @@ type Caller struct {
 
 }
 
-
 func readConfigFile() bool {
 	R.Lock()
 	defer R.Unlock()
