@@ -1,4 +1,5 @@
 MQTTServer:
+  enable: false
   #tcp/ssl/ws
   URI: tcp://127.0.0.1:1883
   #Unique
@@ -12,6 +13,16 @@ MQTTServer:
   TLS:
     #Ex ./CAfile.pem
     caFile:
+    #Ex ./client.pem
+    clientCert:
+    #Ex ./client.key
+    clientKey:
+
+WebService:
+  enable: true
+  port: 12378
+  #留空不开启
+  TLS:
     #Ex ./client.pem
     clientCert:
     #Ex ./client.key

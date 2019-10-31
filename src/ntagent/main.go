@@ -59,6 +59,7 @@ type RPCTLS struct {
 }
 
 type MQTTServer struct {
+	Enable bool `yaml:"enable"`
 	URI      string `yaml:"URI"`
 	ClientID string `yaml:"clientId"`
 	UserName string `yaml:"username"`
@@ -73,11 +74,19 @@ type Subscribe struct {
 	Topics      []string `yaml:"Topics"`
 }
 
+type WebService struct {
+	Enable bool `yaml:"enable"`
+	Port int `yaml:"port"`
+	TLS TLS `yaml:"TLS"`
+
+}
+
 type Config struct {
 	MQTTServer `yaml:"MQTTServer"`
 	Subscribe  `yaml:"Subscribe"`
 	General    `yaml:"General"`
 	Rpc        `yaml:"Rpc"`
+	WebService `yaml:"WebService"`
 }
 
 var (
@@ -87,6 +96,7 @@ var (
 	topics         = make(map[string]byte)
 	logger         *zap.Logger
 	mqttClient     MQTT.Client
+	mqttClientAdapter MQTT.Client
 	xClient        RpcClient.XClient
 )
 
@@ -298,8 +308,8 @@ func onMsgReceived(client MQTT.Client, message MQTT.Message) {
 				zap.String("Topic", message.Topic()),
 				zap.Error(err))
 		} else {
-			if res.Err != nil {
-				logger.Error("Response is error", zap.Error(res.Err))
+			if res.IsError() != nil {
+				logger.Error("Response is error", zap.Error(res.IsError()))
 			} else {
 				logger.Debug("Call result is ", zap.Int64("RequestID", id), zap.Any("Response", res))
 			}
@@ -335,45 +345,76 @@ func onMsgReceived(client MQTT.Client, message MQTT.Message) {
 
 func startServerAPI() {
 	wsContainer := restful.NewContainer()
-	u := UserResource{}
+	u := AccessEnter{}
 	u.RegisterTo(wsContainer)
 
 	// Add container filter to enable CORS
 	cors := restful.CrossOriginResourceSharing{
-		ExposeHeaders:  []string{"X-My-Header"},
+		ExposeHeaders:  []string{"X-ESB-Header"},
 		AllowedHeaders: []string{"Content-Type", "Accept"},
 		AllowedMethods: []string{"GET", "POST"},
-		CookiesAllowed: false,
+		CookiesAllowed: true,
 		Container:      wsContainer}
 	wsContainer.Filter(cors.Filter)
 
 	// Add container filter to respond to OPTIONS
 	wsContainer.Filter(wsContainer.OPTIONSFilter)
 
-	server := &http.Server{Addr: ":12396", Handler: wsContainer}
+	addr:=fmt.Sprintf(":%d", config.WebService.Port)
+	server := &http.Server{Addr: addr, Handler: wsContainer}
 	//defer server.Close()
-	//server.ListenAndServeTLS("","")
-	server.ListenAndServe()
+	if config.WebService.TLS.ClientCertFile!="" && config.WebService.TLS.ClientKeyFile!="" {
+		go server.ListenAndServeTLS( config.WebService.TLS.ClientCertFile, config.WebService.TLS.ClientKeyFile)
+	}else{
+		go server.ListenAndServe()
+	}
 }
 
-type UserResource struct{}
+type AccessEnter struct{}
 
-func (u UserResource) RegisterTo(container *restful.Container) {
+func (u AccessEnter) RegisterTo(container *restful.Container) {
 	ws := new(restful.WebService)
-	ws.
-		Path("/ESB").
-		Consumes("*/*").
-		Produces("*/*")
+	ws.Path("/ESB").Consumes("*/*").Produces("*/*")
 
 
-	ws.Route(ws.POST("").To(u.requestAPIFunc))
+	ws.Route(ws.POST("NT/EDI/v1").To(u.requestAPIFunc).Doc("get a user").
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Writes(fundef.RequestParams{}))
 
+	//ws.Route(ws.POST("Mqtt").To())
 	container.Add(ws)
 }
 
-func (u UserResource) requestAPIFunc(request *restful.Request, response *restful.Response) {
+func initMqttClientAdapter(){
+	connOpts := MQTT.NewClientOptions().AddBroker(config.URI).SetClientID(config.ClientID+"_adapter")
 
+	mqttClientAdapter := MQTT.NewClient(connOpts)
+	if token := mqttClientAdapter.Connect(); token.Wait() && token.Error() != nil {
+		logger.Error("MQTT client connect error",zap.Error(token.Error()))
+	}
+}
+
+func (u AccessEnter) requestMqttAdapterFunc(request *restful.Request, response *restful.Response) {
 	topic:=""
+	body,err:=ioutil.ReadAll(request.Request.Body)
+	if err!=nil{
+		return
+	}
+
+	if mqttClientAdapter!=nil && mqttClientAdapter.IsConnected(){
+		t:=mqttClientAdapter.Publish(topic,byte(2),false,body)
+		if t.Wait() && t.Error()!=nil{
+			logger.Error("MQTT client is error",zap.Error(t.Error()))
+			return
+		}
+	}
+	//等待?
+
+	response.WriteHeaderAndJson(200,nil,"application/json")
+}
+
+func (u AccessEnter) requestAPIFunc(request *restful.Request, response *restful.Response) {
+	topic:="NT/EDI/"
 	body,err:=ioutil.ReadAll(request.Request.Body)
 	if err!=nil{
 		return
@@ -381,25 +422,26 @@ func (u UserResource) requestAPIFunc(request *restful.Request, response *restful
 	s:=string(body)
 	_=s
 	id := fastid.CommonConfig.GenInt64ID()
-	res:=&fundef.ResponseResult{}
-	//res, err := callRpcServer(&fundef.RequestParams{
-	//	ID:        id,
-	//	Topic:     topic,
-	//	TimeStamp: time.Now(),
-	//	Params:    string(body),
-	//}, 0)
-	res.ID=id
+	res, err := callRpcServer(&fundef.RequestParams{
+		ID:        id,
+		Topic:     topic,
+		TimeStamp: time.Now(),
+		Params:    string(body),
+	}, 0)
+
 	if err != nil {
 		logger.Error("Call RPC Server is Failed", zap.Int64("ID", id),
 			zap.String("Topic", topic),
 			zap.Error(err))
 	} else {
-		if res.Err != nil {
-			logger.Error("Response is error", zap.Error(res.Err))
+		res.ID=id
+		if res.IsError() != nil {
+			logger.Error("Response is error", zap.Error(res.IsError()))
 		} else {
 			logger.Debug("Call result is ", zap.Int64("RequestID", id), zap.Any("Response", res))
 		}
 	}
+	//res.Err=errors.WithMessage(res.Err,res.Err.Error())
 	//bytes,err:=res.Marshal()
 	//if err!=nil{
 	//	return
@@ -423,7 +465,9 @@ func main() {
 	logger = helper.NewAdapterLogger(config.LogPath+"/ntagent.log", config.LogSize, config.LogMaxAge, config.LogLevel).Logger
 	defer logger.Sync()
 
-	startServerAPI()
+	if config.WebService.Enable{
+		startServerAPI()
+	}
 
 	//m,_:=helper.ParseJWT("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1ZSwiZXhwIjoxNTY1NzcyNDI1LCJuYW1lIjoidGVzdCJ9.2LwopohhuBDUo1i-jiK4YLnapUVqQi5XDVK57eBH2QQ")
 	//fmt.Println(m)
@@ -451,66 +495,69 @@ func main() {
 	//logger.Info(strings.Join(regFun,","),zap.Skip())
 
 	//cli.Close()
+	if config.MQTTServer.Enable {
+		R.Lock()
+		updateTopics()
+		R.Unlock()
 
-	R.Lock()
-	updateTopics()
-	R.Unlock()
+		//auto refresh config
+		go func() {
+			for {
+				select {
+				case <-readConfigDone:
+					return
 
-	//auto refresh config
-	go func() {
-		for {
-			select {
-			case <-readConfigDone:
-				return
+				case <-time.After(time.Duration(time.Second * time.Duration(config.Subscribe.AutoRefresh))):
+					R.Lock()
+					readConfigFile()
+					updateTopics()
+					R.Unlock()
+				}
+			}
+		}()
 
-			case <-time.After(time.Duration(time.Second * time.Duration(config.Subscribe.AutoRefresh))):
-				R.Lock()
-				readConfigFile()
-				updateTopics()
-				R.Unlock()
+		R.RLock()
+		connOpts := MQTT.NewClientOptions().AddBroker(config.URI).SetClientID(config.ClientID)
+		if config.Retain {
+			//默认是清除上次的Session
+			connOpts.SetCleanSession(!config.Retain)
+		}
+		if helper.IsExists(config.CAFile) && helper.IsExists(config.ClientCertFile) && helper.IsExists(config.ClientKeyFile) {
+			connOpts.SetTLSConfig(NewTLSConfig(config.CAFile, config.ClientCertFile, config.ClientKeyFile))
+		}
+
+		logger.Info("Connecting MQTT Server", zap.String("URI", config.URI),
+			zap.String("ClientId", config.ClientID),
+		)
+
+		//连接回调
+		connOpts.OnConnect = func(c MQTT.Client) {
+			if token := c.SubscribeMultiple(topics, onMsgReceived); token.Wait() && token.Error() != nil {
+				logger.Panic("Subscribe is failed", zap.Error(token.Error()))
 			}
 		}
-	}()
 
-	R.RLock()
-	connOpts := MQTT.NewClientOptions().AddBroker(config.URI).SetClientID(config.ClientID)
-	if config.Retain {
-		//默认是清除上次的Session
-		connOpts.SetCleanSession(!config.Retain)
-	}
-	if helper.IsExists(config.CAFile) && helper.IsExists(config.ClientCertFile) && helper.IsExists(config.ClientKeyFile) {
-		connOpts.SetTLSConfig(NewTLSConfig(config.CAFile, config.ClientCertFile, config.ClientKeyFile))
-	}
-
-	logger.Info("Connecting MQTT Server", zap.String("URI", config.URI),
-		zap.String("ClientId", config.ClientID),
-	)
-
-	//连接回调
-	connOpts.OnConnect = func(c MQTT.Client) {
-		if token := c.SubscribeMultiple(topics, onMsgReceived); token.Wait() && token.Error() != nil {
-			logger.Panic("Subscribe is failed", zap.Error(token.Error()))
+		//连接
+		mqttClient = MQTT.NewClient(connOpts)
+		//try
+		if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+			logger.Error("Connecting is failed.", zap.Error(token.Error()))
+		} else {
+			logger.Info("Connected is successfully.", zap.Skip())
 		}
+		R.RUnlock()
 	}
-
-	//连接
-	mqttClient = MQTT.NewClient(connOpts)
-	//try
-	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		logger.Error("Connecting is failed.", zap.Error(token.Error()))
-	} else {
-		logger.Info("Connected is successfully.", zap.Skip())
-	}
-	R.RUnlock()
 
 	xClient = initRpcClient()
 
 	<-chanSignal
-	readConfigDone <- true
 
-	if mqttClient.IsConnected() {
-		mqttClient.Disconnect(300)
-		logger.Warn("Client closed")
+	if config.MQTTServer.Enable {
+		readConfigDone <- true
+		if mqttClient.IsConnected() {
+			mqttClient.Disconnect(300)
+			logger.Warn("Client closed")
+		}
 	}
 
 	<-time.After(time.Millisecond * 500)

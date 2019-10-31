@@ -18,7 +18,7 @@ func init() {
 	//由配置文件动态读取
 	p := &EDICall{}
 	for _, v := range []string{
-		"NT/EDI/runGroup",
+		"NT/EDI/",
 	} {
 		fundef.RegisterWorkMap[v] = p //同一指针地址,节省内存,提高效率
 	}

@@ -33,8 +33,9 @@ type ResponseResult struct {
 	ID        int64 //request的ID
 	Topic     string
 	TimeStamp time.Time
-	Err       error //逻辑错误,非技术性調用錯誤
-
+	err       error //逻辑错误,非技术性調用錯誤
+	ErrNo	  int //编号
+	ErrMsg 	  string //or序列化不进去?
 	Result interface{} //结果
 
 }
@@ -66,6 +67,9 @@ func (req *RequestParams) Marshal() ([]byte, error) {
 }
 
 func (res *ResponseResult) Marshal() ([]byte, error) {
+	if res.err!=nil && res.ErrMsg==""{
+		res.ErrMsg=res.err.Error()
+	}
 	if b, err := json.Marshal(res); err != nil {
 		return nil, err
 	} else {
@@ -73,11 +77,19 @@ func (res *ResponseResult) Marshal() ([]byte, error) {
 	}
 }
 
+func (res *ResponseResult) IsError() error {
+	return res.err
+}
+
 func (res *ResponseResult) SetError(id int64, topic string, err error) {
 	res.TimeStamp = time.Now()
 	res.ID = id
 	res.Topic = topic
-	res.Err = err
+	res.err = err
+	res.ErrNo=-1
+	if err!=nil{
+		res.ErrMsg=err.Error()
+	}
 }
 
 func (res *ResponseResult) SetResult(id int64, topic string, result interface{}) *ResponseResult {
