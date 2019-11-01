@@ -2,17 +2,45 @@ package edi
 
 import (
 	"context"
+	"fmt"
 
 	"common/fundef"
 	"common/helper"
 	pb "common/work/edi/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"gopkg.in/yaml.v2"
 )
 
-var (
-	CertFile string
-)
+type _configs struct {
+	A  struct{
+		B struct{
+			C struct {
+				D  struct {
+					Port int `yaml:"port"`
+					Cert string `yaml:"cert"`
+				} `yaml:"gRpc"`
+			} `yaml:"EDI"`
+		} `yaml:"Caller"`
+	} `yaml:"General"`
+}
+
+
+var configs  struct{
+	GRPC_Port int
+	GRPC_CertFile string
+}
+
+
+func LoadCfg(content []byte) error{
+	c:=&_configs{}
+	if err:=yaml.Unmarshal(content,c);err!=nil{
+		return err
+	}
+	configs.GRPC_CertFile=c.A.B.C.D.Cert
+	configs.GRPC_Port=c.A.B.C.D.Port
+	return nil
+}
 
 func init() {
 	//由配置文件动态读取
@@ -28,6 +56,7 @@ type EDICall struct {
 	Params []byte
 }
 
+//此Init非Package Init
 func (self *EDICall) Init() {
 	*self = EDICall{}
 }
@@ -39,19 +68,19 @@ func (self *EDICall) Parse(params []byte) error {
 
 func (self *EDICall) Do(ctx context.Context, method string) (interface{}, error) {
 	var op grpc.DialOption
-	if helper.IsExists(CertFile) {
-		creds, err := credentials.NewClientTLSFromFile("key/server.crt", "")
+	if helper.IsExists(configs.GRPC_CertFile) {
+		cred, err := credentials.NewClientTLSFromFile("key/server.crt", "")
 		if err != nil {
 			return nil, err
 		}
-		op = grpc.WithTransportCredentials(creds)
+		op = grpc.WithTransportCredentials(cred)
 	} else {
 		op = grpc.WithInsecure()
 	}
 
 	//pool?
 	//TODO port Configurable
-	conn, err := grpc.Dial(":10038", op)
+	conn, err := grpc.Dial(fmt.Sprintf(":%d",configs.GRPC_Port), op)
 	if err != nil {
 		return nil, err
 	}

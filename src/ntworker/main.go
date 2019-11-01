@@ -57,7 +57,8 @@ func readConfigFile() bool {
 		fmt.Println("conf.yaml is format invalid.", err)
 		return false
 	}
-	return true
+
+	return work.LoadAllCfg(content)==nil
 }
 
 func initMachinery() *machinery.Worker {

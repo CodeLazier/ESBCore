@@ -27,3 +27,8 @@ General:
   Caller:
     #啟用SSL安全連接
     TLS:
+
+    EDI:
+      gRpc:
+        port: 10068
+        cert:

@@ -9,10 +9,16 @@ import (
 	//register
 	_ "common/work/calc"
 	_ "common/work/call"
-	_ "common/work/edi"
+	"common/work/edi"
 	_ "common/work/sample"
 	_ "common/work/test"
 )
+
+func LoadAllCfg(content []byte)error{
+	err:=edi.LoadCfg(content)
+
+	return err
+}
 
 type CmdQueue struct {
 	Broker          string `yaml:"broker"`
@@ -30,7 +36,6 @@ func MainEnter(ctx context.Context, reqStr string,routing []string) (string, err
 
 	//impl
 	if work, ok := fundef.RegisterWorkMap[req.Topic]; ok {
-
 		//init,防止状态带入
 		work.Init()
 		//parse
