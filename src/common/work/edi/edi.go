@@ -2,6 +2,8 @@ package edi
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 
 	"common/fundef"
@@ -88,8 +90,19 @@ func (self *EDICall) Do(ctx context.Context, method string) (interface{}, error)
 
 	client := pb.NewEDICallClient(conn)
 
+	_method:=method
+	if _method=="" {
+		_m :=struct{
+			Method string `json:"method"`
+		}{""}
+		if err:=json.Unmarshal(self.Params,&_m);err!=nil || _m.Method==""{
+			return nil,errors.New("Method field is not found")
+		}
+		_method=_m.Method;
+	}
+
 	req := &pb.EDIRequest{
-		Method: method,
+		Method: _method,
 		Params: string(self.Params),
 	}
 
