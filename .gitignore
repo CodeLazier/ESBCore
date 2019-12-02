@@ -11,6 +11,7 @@
 /motan-go
 /mqtt
 /code
+dist
 
 
 
@@ -19,3 +20,6 @@
 *.sum
 *.mod
 *.lnk
+*.bat
+*.html
+*.zip

@@ -23,10 +23,10 @@ import (
 	"github.com/pkg/errors"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/emicklei/go-restful"
 	RpcClient "github.com/smallnest/rpcx/client"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
-	"github.com/emicklei/go-restful"
 )
 
 type ServiceSelect struct {
@@ -59,7 +59,7 @@ type RPCTLS struct {
 }
 
 type MQTTServer struct {
-	Enable bool `yaml:"enable"`
+	Enable   bool   `yaml:"enable"`
 	URI      string `yaml:"URI"`
 	ClientID string `yaml:"clientId"`
 	UserName string `yaml:"username"`
@@ -76,9 +76,8 @@ type Subscribe struct {
 
 type WebService struct {
 	Enable bool `yaml:"enable"`
-	Port int `yaml:"port"`
-	TLS TLS `yaml:"TLS"`
-
+	Port   int  `yaml:"port"`
+	TLS    TLS  `yaml:"TLS"`
 }
 
 type Config struct {
@@ -90,14 +89,14 @@ type Config struct {
 }
 
 var (
-	config         = &Config{}
-	R              = sync.RWMutex{}
-	readConfigDone = make(chan bool)
-	topics         = make(map[string]byte)
-	logger         *zap.Logger
-	mqttClient     MQTT.Client
+	config            = &Config{}
+	R                 = sync.RWMutex{}
+	readConfigDone    = make(chan bool)
+	topics            = make(map[string]byte)
+	logger            *zap.Logger
+	mqttClient        MQTT.Client
 	mqttClientAdapter MQTT.Client
-	xClient        RpcClient.XClient
+	xClient           RpcClient.XClient
 )
 
 func NewTLSConfig(cafile, ccfile, ckeyfile string) *tls.Config {
@@ -360,12 +359,12 @@ func startServerAPI() {
 	// Add container filter to respond to OPTIONS
 	wsContainer.Filter(wsContainer.OPTIONSFilter)
 
-	addr:=fmt.Sprintf(":%d", config.WebService.Port)
+	addr := fmt.Sprintf(":%d", config.WebService.Port)
 	server := &http.Server{Addr: addr, Handler: wsContainer}
 	//defer server.Close()
-	if config.WebService.TLS.ClientCertFile!="" && config.WebService.TLS.ClientKeyFile!="" {
-		go server.ListenAndServeTLS( config.WebService.TLS.ClientCertFile, config.WebService.TLS.ClientKeyFile)
-	}else{
+	if config.WebService.TLS.ClientCertFile != "" && config.WebService.TLS.ClientKeyFile != "" {
+		go server.ListenAndServeTLS(config.WebService.TLS.ClientCertFile, config.WebService.TLS.ClientKeyFile)
+	} else {
 		go server.ListenAndServe()
 	}
 }
@@ -376,7 +375,6 @@ func (u AccessEnter) RegisterTo(container *restful.Container) {
 	ws := new(restful.WebService)
 	ws.Path("/ESB").Consumes("*/*").Produces("*/*")
 
-
 	ws.Route(ws.POST("NT/EDI/v1").To(u.requestAPIFunc).Doc("get a user").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes(fundef.RequestParams{}))
@@ -385,42 +383,42 @@ func (u AccessEnter) RegisterTo(container *restful.Container) {
 	container.Add(ws)
 }
 
-func initMqttClientAdapter(){
-	connOpts := MQTT.NewClientOptions().AddBroker(config.URI).SetClientID(config.ClientID+"_adapter")
+func initMqttClientAdapter() {
+	connOpts := MQTT.NewClientOptions().AddBroker(config.URI).SetClientID(config.ClientID + "_adapter")
 
 	mqttClientAdapter := MQTT.NewClient(connOpts)
 	if token := mqttClientAdapter.Connect(); token.Wait() && token.Error() != nil {
-		logger.Error("MQTT client connect error",zap.Error(token.Error()))
+		logger.Error("MQTT client connect error", zap.Error(token.Error()))
 	}
 }
 
 func (u AccessEnter) requestMqttAdapterFunc(request *restful.Request, response *restful.Response) {
-	topic:=""
-	body,err:=ioutil.ReadAll(request.Request.Body)
-	if err!=nil{
+	topic := ""
+	body, err := ioutil.ReadAll(request.Request.Body)
+	if err != nil {
 		return
 	}
 
-	if mqttClientAdapter!=nil && mqttClientAdapter.IsConnected(){
-		t:=mqttClientAdapter.Publish(topic,byte(2),false,body)
-		if t.Wait() && t.Error()!=nil{
-			logger.Error("MQTT client is error",zap.Error(t.Error()))
+	if mqttClientAdapter != nil && mqttClientAdapter.IsConnected() {
+		t := mqttClientAdapter.Publish(topic, byte(2), false, body)
+		if t.Wait() && t.Error() != nil {
+			logger.Error("MQTT client is error", zap.Error(t.Error()))
 			return
 		}
 	}
 	//等待?
 
-	response.WriteHeaderAndJson(200,nil,"application/json")
+	response.WriteHeaderAndJson(200, nil, "application/json")
 }
 
 func (u AccessEnter) requestAPIFunc(request *restful.Request, response *restful.Response) {
-	topic:="NT/EDI/"
-	body,err:=ioutil.ReadAll(request.Request.Body)
-	if err!=nil{
+	topic := "NT/EDI/"
+	body, err := ioutil.ReadAll(request.Request.Body)
+	if err != nil {
 		return
 	}
-	s:=string(body)
-	_=s
+	s := string(body)
+	_ = s
 	id := fastid.CommonConfig.GenInt64ID()
 	res, err := callRpcServer(&fundef.RequestParams{
 		ID:        id,
@@ -434,7 +432,7 @@ func (u AccessEnter) requestAPIFunc(request *restful.Request, response *restful.
 			zap.String("Topic", topic),
 			zap.Error(err))
 	} else {
-		res.ID=id
+		res.ID = id
 		if res.IsError() != nil {
 			logger.Error("Response is error", zap.Error(res.IsError()))
 		} else {
@@ -447,11 +445,10 @@ func (u AccessEnter) requestAPIFunc(request *restful.Request, response *restful.
 	//	return
 	//}
 	//writer.Write(bytes)
-	response.WriteHeaderAndJson(200,res,"application/json")
+	response.WriteHeaderAndJson(200, res, "application/json")
 	//response.ResponseWriter.Write(bytes)
 	//io.WriteString(response.ResponseWriter, "this would be a normal response")
 }
-
 
 func main() {
 	chanSignal := make(chan os.Signal, 1)
@@ -465,7 +462,7 @@ func main() {
 	logger = helper.NewAdapterLogger(config.LogPath+"/ntagent.log", config.LogSize, config.LogMaxAge, config.LogLevel).Logger
 	defer logger.Sync()
 
-	if config.WebService.Enable{
+	if config.WebService.Enable {
 		startServerAPI()
 	}
 

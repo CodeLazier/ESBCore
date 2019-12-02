@@ -19,7 +19,7 @@ type _configs struct {
 		B struct{
 			C struct {
 				D  struct {
-					Port int `yaml:"port"`
+					Server string `yaml:"server"`
 					Cert string `yaml:"cert"`
 				} `yaml:"gRpc"`
 			} `yaml:"EDI"`
@@ -29,7 +29,7 @@ type _configs struct {
 
 
 var configs  struct{
-	GRPC_Port int
+	GRPC_Server string
 	GRPC_CertFile string
 }
 
@@ -40,7 +40,7 @@ func LoadCfg(content []byte) error{
 		return err
 	}
 	configs.GRPC_CertFile=c.A.B.C.D.Cert
-	configs.GRPC_Port=c.A.B.C.D.Port
+	configs.GRPC_Server=c.A.B.C.D.Server
 	return nil
 }
 
@@ -82,7 +82,7 @@ func (self *EDICall) Do(ctx context.Context, method string) (interface{}, error)
 
 	//pool?
 	//TODO port Configurable
-	conn, err := grpc.Dial(fmt.Sprintf(":%d",configs.GRPC_Port), op)
+	conn, err := grpc.Dial(fmt.Sprintf("%s",configs.GRPC_Server), op,grpc.WithDisableRetry())
 	if err != nil {
 		return nil, err
 	}

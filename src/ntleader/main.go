@@ -162,7 +162,7 @@ func publisherTask(ctx context.Context, routKey string, req *fundef.RequestParam
 		UUID:       id,
 		RoutingKey: config.Tag,
 		ETA:        eta,
-		RetryCount: 0,
+		RetryCount: 0,//不重复
 		Args: []tasks.Arg{
 			{
 				Type:  "string",
