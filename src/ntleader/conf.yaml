@@ -40,3 +40,11 @@ General:
     routing:
       - Ex/Example/Call,12236
       - sdf/sdf/sdf/er/er,4059845
+
+    #啟用SSL安全連接
+    TLS:
+
+    EDI:
+      gRpc:
+        server: 127.0.0.1:10068
+        cert:

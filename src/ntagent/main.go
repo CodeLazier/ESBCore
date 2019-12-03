@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -413,6 +414,7 @@ func (u AccessEnter) requestMqttAdapterFunc(request *restful.Request, response *
 
 func (u AccessEnter) requestAPIFunc(request *restful.Request, response *restful.Response) {
 	topic := "NT/EDI/"
+	defer request.Request.Body.Close()
 	body, err := ioutil.ReadAll(request.Request.Body)
 	if err != nil {
 		return
@@ -420,6 +422,7 @@ func (u AccessEnter) requestAPIFunc(request *restful.Request, response *restful.
 	s := string(body)
 	_ = s
 	id := fastid.CommonConfig.GenInt64ID()
+
 	res, err := callRpcServer(&fundef.RequestParams{
 		ID:        id,
 		Topic:     topic,
@@ -439,6 +442,8 @@ func (u AccessEnter) requestAPIFunc(request *restful.Request, response *restful.
 			logger.Debug("Call result is ", zap.Int64("RequestID", id), zap.Any("Response", res))
 		}
 	}
+
+
 	//res.Err=errors.WithMessage(res.Err,res.Err.Error())
 	//bytes,err:=res.Marshal()
 	//if err!=nil{
