@@ -18,7 +18,6 @@ import (
 	"time"
 
 	NTCommon "common"
-	"common/fundef"
 	"common/helper"
 	"github.com/beinan/fastid"
 	"github.com/pkg/errors"
@@ -193,14 +192,14 @@ func initRpcClient() RpcClient.XClient {
 	//}
 }
 
-func callRpcServer(req *fundef.RequestParams, timeout time.Duration) (*fundef.ResponseResult, error) {
-	var reply fundef.ResponseResult
+func callRpcServer(req *NTCommon.ESBRequest, timeout time.Duration) (*NTCommon.ESBResponse, error) {
+	var reply NTCommon.ESBResponse
 	if xClient != nil {
 		ctx := context.Background()
 		if timeout > 0 {
 			ctx, _ = context.WithTimeout(ctx, timeout)
 		}
-		err := xClient.Call(ctx, NTCommon.ESBRequestFunc, req, &reply)
+		err := xClient.Call(ctx, NTCommon.ESBRequestFunction, req, &reply)
 		if err != nil {
 			return nil, err
 		}
@@ -296,11 +295,11 @@ func onMsgReceived(client MQTT.Client, message MQTT.Message) {
 		_ = authInfo
 
 		id := fastid.CommonConfig.GenInt64ID()
-		res, err := callRpcServer(&fundef.RequestParams{
+		res, err := callRpcServer(&NTCommon.ESBRequest{
 			ID:        id,
 			Topic:     message.Topic(),
 			TimeStamp: time.Now(),
-			Params:    string(payload),
+			Payload:   string(payload),
 		}, 0)
 
 		if err != nil {
@@ -374,11 +373,10 @@ type AccessEnter struct{}
 
 func (u AccessEnter) RegisterTo(container *restful.Container) {
 	ws := new(restful.WebService)
-	ws.Path("/ESB").Consumes("*/*").Produces("*/*")
+	ws.Path("/ESB").Consumes(restful.MIME_JSON, restful.MIME_JSON).
+		Produces(restful.MIME_JSON, restful.MIME_JSON)
 
-	ws.Route(ws.POST("NT/EDI/v1").To(u.requestAPIFunc).Doc("get a user").
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Writes(fundef.RequestParams{}))
+	ws.Route(ws.POST("NT/EDI/v1").To(u.EDIRequest_v1).Writes(NTCommon.ESBResponse{}))
 
 	//ws.Route(ws.POST("Mqtt").To())
 	container.Add(ws)
@@ -412,47 +410,41 @@ func (u AccessEnter) requestMqttAdapterFunc(request *restful.Request, response *
 	response.WriteHeaderAndJson(200, nil, "application/json")
 }
 
-func (u AccessEnter) requestAPIFunc(request *restful.Request, response *restful.Response) {
-	topic := "NT/EDI/"
+func (u AccessEnter) EDIRequest_v1(request *restful.Request, response *restful.Response) {
 	defer request.Request.Body.Close()
 	body, err := ioutil.ReadAll(request.Request.Body)
 	if err != nil {
-		return
-	}
-	s := string(body)
-	_ = s
-	id := fastid.CommonConfig.GenInt64ID()
-
-	res, err := callRpcServer(&fundef.RequestParams{
-		ID:        id,
-		Topic:     topic,
-		TimeStamp: time.Now(),
-		Params:    string(body),
-	}, 0)
-
-	if err != nil {
-		logger.Error("Call RPC Server is Failed", zap.Int64("ID", id),
-			zap.String("Topic", topic),
-			zap.Error(err))
+		logger.Error("500", zap.Error(err))
+		response.WriteHeaderAndJson(500, err.Error(), "application/json")
 	} else {
-		res.ID = id
-		if res.IsError() != nil {
-			logger.Error("Response is error", zap.Error(res.IsError()))
+		req := &NTCommon.ESBRequest{TimeStamp:time.Now(), Topic: "NT/EDI/", ID: fastid.CommonConfig.GenInt64ID(), Enqueue: true}
+		if err = req.Unmarshal(body); err != nil {
+			logger.Error("400", zap.Error(err))
+			response.WriteHeaderAndJson(400, err.Error(), "application/json")
 		} else {
-			logger.Debug("Call result is ", zap.Int64("RequestID", id), zap.Any("Response", res))
+			res, err := callRpcServer(req, 0)
+			if err != nil {
+				logger.Error("Call RPC Server is Failed", zap.Int64("ID", req.ID),
+					zap.String("Topic", req.Topic),
+					zap.Error(err))
+			} else {
+				if res.IsError() != nil {
+					logger.Error("Response is error", zap.Error(res.IsError()))
+				} else {
+					logger.Debug("Call result is ", zap.Int64("RequestID", req.ID), zap.Any("Response", res))
+				}
+			}
+			//res.Err=errors.WithMessage(res.Err,res.Err.Error())
+			//bytes,err:=res.Marshal()
+			//if err!=nil{
+			//	return
+			//}
+			//writer.Write(bytes)
+			response.WriteHeaderAndJson(200, res, "application/json")
+			//response.ResponseWriter.Write(bytes)
+			//io.WriteString(response.ResponseWriter, "this would be a normal response")
 		}
 	}
-
-
-	//res.Err=errors.WithMessage(res.Err,res.Err.Error())
-	//bytes,err:=res.Marshal()
-	//if err!=nil{
-	//	return
-	//}
-	//writer.Write(bytes)
-	response.WriteHeaderAndJson(200, res, "application/json")
-	//response.ResponseWriter.Write(bytes)
-	//io.WriteString(response.ResponseWriter, "this would be a normal response")
 }
 
 func main() {

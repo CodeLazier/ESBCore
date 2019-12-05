@@ -3,7 +3,7 @@ package sample
 import (
 	"context"
 
-	"common/fundef"
+	. "common"
 )
 
 func init() {
@@ -11,7 +11,7 @@ func init() {
 	for _, v := range []string{
 		"NT/Sample/",
 	} {
-		fundef.RegisterWorkMap[v] = p //同一指针地址,节省内存,提高效率
+		RegisterWorkMap[v] = p //同一指针地址,节省内存,提高效率
 	}
 }
 
@@ -22,10 +22,10 @@ func (self *Sample) Init() {
 	*self = Sample{}
 }
 
-func (*Sample) Parse([]byte) error {
+func (*Sample) Parse(interface{}) error {
 	return nil
 }
 
-func (*Sample) Do(ctx context.Context, method string) (interface{}, error) {
+func (*Sample) Do(ctx context.Context) (interface{}, error) {
 	return "Pong", nil
 }

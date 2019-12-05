@@ -2,11 +2,10 @@ package edi
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
+
 	"fmt"
 
-	"common/fundef"
+	. "common"
 	"common/helper"
 	pb "common/work/edi/pb"
 	"google.golang.org/grpc"
@@ -15,32 +14,30 @@ import (
 )
 
 type _configs struct {
-	A  struct{
-		B struct{
+	A struct {
+		B struct {
 			C struct {
-				D  struct {
+				D struct {
 					Server string `yaml:"server"`
-					Cert string `yaml:"cert"`
+					Cert   string `yaml:"cert"`
 				} `yaml:"gRpc"`
 			} `yaml:"EDI"`
 		} `yaml:"Caller"`
 	} `yaml:"General"`
 }
 
-
-var configs  struct{
-	GRPC_Server string
+var configs struct {
+	GRPC_Server   string
 	GRPC_CertFile string
 }
 
-
-func LoadCfg(content []byte) error{
-	c:=&_configs{}
-	if err:=yaml.Unmarshal(content,c);err!=nil{
+func LoadCfg(content []byte) error {
+	c := &_configs{}
+	if err := yaml.Unmarshal(content, c); err != nil {
 		return err
 	}
-	configs.GRPC_CertFile=c.A.B.C.D.Cert
-	configs.GRPC_Server=c.A.B.C.D.Server
+	configs.GRPC_CertFile = c.A.B.C.D.Cert
+	configs.GRPC_Server = c.A.B.C.D.Server
 	return nil
 }
 
@@ -50,12 +47,12 @@ func init() {
 	for _, v := range []string{
 		"NT/EDI/",
 	} {
-		fundef.RegisterWorkMap[v] = p //同一指针地址,节省内存,提高效率
+		RegisterWorkMap[v] = p //同一指针地址,节省内存,提高效率
 	}
 }
 
 type EDICall struct {
-	Params []byte
+	Params EDIRequest
 }
 
 //此Init非Package Init
@@ -63,12 +60,11 @@ func (self *EDICall) Init() {
 	*self = EDICall{}
 }
 
-func (self *EDICall) Parse(params []byte) error {
-	self.Params = params
-	return nil
+func (self *EDICall) Parse(params interface{}) error {
+	return self.Params.Unmarshal(params)
 }
 
-func (self *EDICall) Do(ctx context.Context, method string) (interface{}, error) {
+func (self *EDICall) Do(ctx context.Context) (interface{}, error) {
 	var op grpc.DialOption
 	if helper.IsExists(configs.GRPC_CertFile) {
 		cred, err := credentials.NewClientTLSFromFile("key/server.crt", "")
@@ -82,7 +78,7 @@ func (self *EDICall) Do(ctx context.Context, method string) (interface{}, error)
 
 	//pool?
 	//TODO port Configurable
-	conn, err := grpc.Dial(fmt.Sprintf("%s",configs.GRPC_Server), op,grpc.WithDisableRetry())
+	conn, err := grpc.Dial(fmt.Sprintf("%s", configs.GRPC_Server), op, grpc.WithDisableRetry())
 	if err != nil {
 		return nil, err
 	}
@@ -90,20 +86,11 @@ func (self *EDICall) Do(ctx context.Context, method string) (interface{}, error)
 
 	client := pb.NewEDICallClient(conn)
 
-	_method:=method
-	if _method=="" {
-		_m :=struct{
-			Method string `json:"method"`
-		}{""}
-		if err:=json.Unmarshal(self.Params,&_m);err!=nil || _m.Method==""{
-			return nil,errors.New("Method field is not found")
-		}
-		_method=_m.Method;
-	}
+
 
 	req := &pb.EDIRequest{
-		Method: _method,
-		Params: string(self.Params),
+		Method: self.Params.Method,
+		Params: self.Params.Params,
 	}
 
 	res, err := client.Call(ctx, req)

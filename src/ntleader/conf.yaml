@@ -32,6 +32,9 @@ General:
     broker: redis://localhost:6379
     #持久化后端,支援Redis,Memcache,MongoDB
     backend: redis://localhost:6379
+    #等待执行结果最大时间,单位hour
+    waitTimeout: 24
+
 
   Leader:
     tag: NT_Worker

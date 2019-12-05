@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 
-	"common/fundef"
+	. "common"
 )
 
 func init() {
@@ -16,7 +16,7 @@ func init() {
 		"NT/Test/Ping",
 		"NT/Test/FetchImage",
 	} {
-		fundef.RegisterWorkMap[v] = p //同一指针地址,节省内存,提高效率
+		RegisterWorkMap[v] = p //同一指针地址,节省内存,提高效率
 	}
 }
 
@@ -43,7 +43,7 @@ func (self *Test) Init() {
 	*self = Test{}
 }
 
-func (*Test) Parse([]byte) error {
+func (*Test) Parse(interface{}) error {
 	return nil
 }
 
@@ -111,14 +111,14 @@ func (*Test) ping() (interface{}, error) {
 	return "Pong", nil
 }
 
-func (self *Test) Do(ctx context.Context, method string) (interface{}, error) {
-	switch method {
-	case "Ping":
-		return self.ping()
-	case "DataType":
-		return self.dataType()
-	case "FetchImage":
-		return self.fetchImage()
-	}
-	return nil, fundef.NoImplFunError
+func (self *Test) Do(ctx context.Context) (interface{}, error) {
+	//switch method {
+	//case "Ping":
+	//	return self.ping()
+	//case "DataType":
+	//	return self.dataType()
+	//case "FetchImage":
+	//	return self.fetchImage()
+	//}
+	return nil, NoImplFunError
 }

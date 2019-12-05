@@ -3,7 +3,7 @@ package call
 import (
 	"context"
 
-	"common/fundef"
+	. "common"
 	"common/helper"
 	pb "common/work/call/pb"
 	"google.golang.org/grpc"
@@ -21,24 +21,24 @@ func init() {
 	for _, v := range []string{
 		"Ex/Example/Call/Test",
 	} {
-		fundef.RegisterWorkMap[v] = p //同一指针地址,节省内存,提高效率
+		RegisterWorkMap[v] = p //同一指针地址,节省内存,提高效率
 	}
 }
 
 type Call struct {
-	Params []byte
+	Params interface{}
 }
 
 func (self *Call) Init() {
 	*self = Call{}
 }
 
-func (self *Call) Parse(params []byte) error {
+func (self *Call) Parse(params interface{}) error {
 	self.Params = params
 	return nil
 }
 
-func (self *Call) Do(ctx context.Context, method string) (interface{}, error) {
+func (self *Call) Do(ctx context.Context) (interface{}, error) {
 	var op grpc.DialOption
 	if helper.IsExists(CertFile) {
 		creds, err := credentials.NewClientTLSFromFile("key/server.crt", "")
@@ -61,8 +61,8 @@ func (self *Call) Do(ctx context.Context, method string) (interface{}, error) {
 	client := pb.NewCallClient(conn)
 
 	req := &pb.Request{
-		Method: method,
-		Params: string(self.Params),
+		Method: "",
+		Params: self.Params.(string),
 	}
 
 	res, err := client.Call(ctx, req)

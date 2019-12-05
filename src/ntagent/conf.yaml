@@ -58,6 +58,7 @@ Rpc:
 
 
 General:
+  Debug: true
   Log:
     path: ./log
     #single log file max size(M),0 is Infinity size until fill disk
