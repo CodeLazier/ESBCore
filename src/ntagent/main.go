@@ -412,16 +412,24 @@ func (u AccessEnter) requestMqttAdapterFunc(request *restful.Request, response *
 
 func (u AccessEnter) EDIRequest_v1(request *restful.Request, response *restful.Response) {
 	defer request.Request.Body.Close()
+
 	body, err := ioutil.ReadAll(request.Request.Body)
 	if err != nil {
 		logger.Error("500", zap.Error(err))
 		response.WriteHeaderAndJson(500, err.Error(), "application/json")
+
 	} else {
-		req := &NTCommon.ESBRequest{TimeStamp:time.Now(), Topic: "NT/EDI/", ID: fastid.CommonConfig.GenInt64ID(), Enqueue: true}
+
+		req := &NTCommon.ESBRequest{Enqueue: true}
+
 		if err = req.Unmarshal(body); err != nil {
 			logger.Error("400", zap.Error(err))
 			response.WriteHeaderAndJson(400, err.Error(), "application/json")
+
 		} else {
+			//init
+			req.TimeStamp, req.Topic, req.ID = time.Now(), "NT/EDI/", fastid.CommonConfig.GenInt64ID()
+
 			res, err := callRpcServer(req, 0)
 			if err != nil {
 				logger.Error("Call RPC Server is Failed", zap.Int64("ID", req.ID),

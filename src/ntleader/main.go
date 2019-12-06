@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,27 +17,23 @@ import (
 	NTCommon "common"
 	"common/helper"
 	"common/work"
-	"github.com/RichardKnop/machinery/v1"
-	"github.com/RichardKnop/machinery/v1/tasks"
 	"go.uber.org/zap"
 
-	"github.com/opentracing/opentracing-go"
-	opentracing_log "github.com/opentracing/opentracing-go/log"
+	YServer "github.com/gojuukaze/YTask/v2/server"
 
 	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/rcrowley/go-metrics"
 	RpcServer "github.com/smallnest/rpcx/server"
 	"github.com/smallnest/rpcx/serverplugin"
 	"gopkg.in/yaml.v2"
-
-	MConfig "github.com/RichardKnop/machinery/v1/config"
 )
 
 var (
-	config    = &Config{}
-	R         = sync.Mutex{}
-	logger    *zap.Logger
-	ServerMac *machinery.Server
+	config     = &Config{}
+	R          = sync.Mutex{}
+	logger     *zap.Logger
+	TaskServer *YServer.Server
+	TaskClient *YServer.Client
 )
 
 type General struct {
@@ -123,128 +118,164 @@ func readConfigFile() bool {
 //该函数返回即回传res到client,如果处理中使用goroutine,注意要阻塞此函数返回
 func rpcCallback(ctx context.Context, req *NTCommon.ESBRequest, res *NTCommon.ESBResponse) error {
 	if req.Enqueue {
-		r, err := sendTask(ctx, "", req, nil)
+		r, err := sendTask(req)
 		if err != nil {
 			logger.Error("Call is error.", zap.Error(err))
 			res.SetError(req, err)
-		} else {
+		} else  {
+			if r.ErrMsg != "" {
+				logger.Debug("Response is error.", zap.Error(errors.New(r.ErrMsg)))
+			}
 			//注意,保持res指针地址,不要覆盖
-			res.AssignForRes(r, r.Result)
+			*res = *r //res.AssignForRes(r, r.Result)
 		}
 	} else {
-		if resJson, err := work.MainEnterDirect(ctx, req, config.Caller.Routing); err != nil {
-			logger.Error("Call is error.", zap.Error(err))
+		if resResult, err := work.MainEnterDirect(ctx, req); err != nil {
 			res.SetError(req, err)
 		} else {
-			resResult := &NTCommon.ESBResponse{}
-			if err := resResult.Unmarshal([]byte(resJson)); err != nil {
-				logger.Error("Call is error.", zap.Error(err))
-				res.SetError(req, err)
+			//注意,保持res指针地址,不要覆盖
+			//res.AssignForRes(resResult, resResult.Result)
+			*res = *resResult
+		}
+	}
+
+	return nil
+}
+
+func sendTask(req *NTCommon.ESBRequest) (*NTCommon.ESBResponse, error) {
+	var err error
+
+	if taskId, err := TaskClient.SetTaskCtl(TaskClient.RetryCount, 1).Send(NTCommon.ESBCaller, "MainEnter", req); err == nil {
+		//waiting result
+		if result, err := TaskClient.GetResult(taskId, 2*time.Hour, 3*time.Millisecond); err == nil {
+			var resStr string
+			if result.IsSuccess() {
+				if err := result.Get(0, &resStr); err != nil {
+					return nil, err
+				} else {
+					res := &NTCommon.ESBResponse{}
+					if err = res.Unmarshal([]byte(resStr)); err != nil {
+						return nil, err
+					} else {
+						return res, nil
+					}
+				}
 			} else {
-				//注意,保持res指针地址,不要覆盖
-				res.AssignForRes(resResult, resResult.Result)
+				return nil, errors.New("Result get is faild.")
 			}
 		}
 	}
-	return nil
+
+	return nil, err
 }
 
-func sendTask(ctx context.Context, routKey string, req *NTCommon.ESBRequest, eta *time.Time) (*NTCommon.ESBResponse, error) {
+//func sendTask(ctx context.Context, routKey string, req *NTCommon.ESBRequest, eta *time.Time) (*NTCommon.ESBResponse, error) {
+//
+//	if ServerMac == nil {
+//		return nil, errors.New("Server is null")
+//	}
+//
+//	span, ctx := opentracing.StartSpanFromContext(ctx, "PushTask")
+//	defer span.Finish()
+//	id := strconv.FormatInt(req.ID, 10)
+//	span.SetBaggageItem("batch.id", id)
+//	span.LogFields(opentracing_log.String("batch.id", id))
+//
+//	//序列化
+//	bytes, err := req.Marshal()
+//
+//	if err != nil {
+//		//logger.Error("Request serialize is failed.", zap.Error(err))
+//		return nil, err
+//	}
+//
+//	task := tasks.Signature{
+//		Name:       "MainEnter",
+//		UUID:       id,
+//		RoutingKey: config.Tag,
+//		ETA:        eta,
+//		RetryCount: 0, //不重复
+//		Args: []tasks.Arg{
+//			{
+//				Type:  "string",
+//				Value: string(bytes), //注意,Signature再发送给队列时会再次序列化
+//			},
+//			{
+//				Type:  "[]string",
+//				Value: config.Caller.Routing, //strings.Join(config.Caller.Routing,"&"), //注意,Signature再发送给队列时会再次序列化
+//			},
+//		},
+//	}
+//
+//	//ctx_e:=context.WithValue(ctx,"extends",config.Extends)
+//
+//	//发布到消息队列
+//	result, err := ServerMac.SendTaskWithContext(ctx, &task)
+//	if err != nil {
+//		//logger.Error("Send task queue is error", zap.Error(err))
+//		return nil, err
+//	}
+//
+//
+//	//定时轮训检测是否有结果
+//	if value, err := result.GetWithTimeout(time.Duration(time.Hour * time.Duration(config.WaitTimeout)) , time.Duration(time.Millisecond * 30)); err != nil {
+//		return nil, err
+//	} else {
+//		//默认日志Debug等级会输出结果,这里不必再次输出
+//		resJson := tasks.HumanReadableResults(value)
+//		res:=&NTCommon.ESBResponse{}
+//		if err=res.Unmarshal([]byte(resJson));err!=nil{
+//			//logger.Error("Marshal is error", zap.Error(err))
+//			return nil, err
+//		} else {
+//			return res, nil
+//		}
+//	}
+//}
 
-	if ServerMac == nil {
-		return nil, errors.New("Server is null")
-	}
+func initYTask() {
+	// 对于client你需要设置poolSize
+	broker := work.NewTaskBroker("127.0.0.1", "6379", "", 0, 10)
+	backend := work.NewTaskBackend("127.0.0.1", "6379", "", 0, 10)
 
-	span, ctx := opentracing.StartSpanFromContext(ctx, "PushTask")
-	defer span.Finish()
-	id := strconv.FormatInt(req.ID, 10)
-	span.SetBaggageItem("batch.id", id)
-	span.LogFields(opentracing_log.String("batch.id", id))
-
-	//序列化
-	bytes, err := req.Marshal()
-
-	if err != nil {
-		logger.Error("Request serialize is failed.", zap.Error(err))
-		return nil, err
-	}
-
-	task := tasks.Signature{
-		Name:       "MainEnter",
-		UUID:       id,
-		RoutingKey: config.Tag,
-		ETA:        eta,
-		RetryCount: 0, //不重复
-		Args: []tasks.Arg{
-			{
-				Type:  "string",
-				Value: bytes, //注意,Signature再发送给队列时会再次序列化
-			},
-			{
-				Type:  "[]string",
-				Value: config.Caller.Routing, //strings.Join(config.Caller.Routing,"&"), //注意,Signature再发送给队列时会再次序列化
-			},
-		},
-	}
-
-	//ctx_e:=context.WithValue(ctx,"extends",config.Extends)
-
-	//发布到消息队列
-	result, err := ServerMac.SendTaskWithContext(ctx, &task)
-	if err != nil {
-		logger.Error("Send task queue is error", zap.Error(err))
-		return nil, err
-	}
-
-	//定时轮训检测是否有结果
-	if value, err := result.GetWithTimeout(time.Duration(time.Hour * time.Duration(config.WaitTimeout)) , time.Duration(time.Millisecond * 30)); err != nil {
-		return nil, err
-	} else {
-		//默认日志Debug等级会输出结果,这里不必再次输出
-		resJson := tasks.HumanReadableResults(value)
-		res:=&NTCommon.ESBResponse{}
-		if err=res.Unmarshal([]byte(resJson));err!=nil{
-			logger.Error("Marshal is error", zap.Error(err))
-			return nil, err
-		} else {
-			return res, nil
-		}
-	}
+	TaskServer = work.InitTaskServer(broker, backend, -1, -1)
+	_c := TaskServer.GetClient()
+	TaskClient = &_c
 }
 
-func initMachinery() *machinery.Server {
-
-	cleanup, err := helper.SetupTracer("sender")
-	if err != nil {
-		logger.Fatal("Unable to instantiate a tracer:", zap.Error(err))
-	}
-	defer cleanup()
-
-	confMac := &MConfig.Config{
-		Broker:          config.Broker,
-		ResultBackend:   config.Backend,
-		ResultsExpireIn: config.ResultsExpireIn * 3600000, //3600秒 1小时,这里没有使用,因为Publish不负责保存结果
-		Redis: &MConfig.RedisConfig{
-			MaxIdle:                3,
-			IdleTimeout:            240,
-			ReadTimeout:            15,
-			WriteTimeout:           15,
-			ConnectTimeout:         15,
-			DelayedTasksPollPeriod: 20,
-		},
-	}
-
-	if s, err := machinery.NewServer(confMac); err != nil {
-		logger.Panic("Connect server is failed.", zap.Error(err))
-	} else {
-		//注册
-		if err = s.RegisterTask("MainEnter", work.MainEnter); err != nil {
-			logger.Panic("Register tasks is failed.", zap.Error(err))
-		}
-		return s
-	}
-	return nil
-}
+//func initMachinery() *machinery.Server {
+//
+//	cleanup, err := helper.SetupTracer("sender")
+//	if err != nil {
+//		logger.Fatal("Unable to instantiate a tracer:", zap.Error(err))
+//	}
+//	defer cleanup()
+//
+//	confMac := &MConfig.Config{
+//		Broker:          config.Broker,
+//		ResultBackend:   config.Backend,
+//		ResultsExpireIn: config.ResultsExpireIn * 3600000, //3600秒 1小时,这里没有使用,因为Publish不负责保存结果
+//		//Redis: &MConfig.RedisConfig{
+//		//	MaxIdle:                10,
+//		//	IdleTimeout:            240,
+//		//	ReadTimeout:            15,
+//		//	WriteTimeout:           15,
+//		//	ConnectTimeout:         15,
+//		//	DelayedTasksPollPeriod: 20,
+//		//},
+//	}
+//
+//	if s, err := machinery.NewServer(confMac); err != nil {
+//		logger.Panic("Connect server is failed.", zap.Error(err))
+//	} else {
+//		//注册
+//		if err = s.RegisterTask("MainEnter", work.MainEnter); err != nil {
+//			logger.Panic("Register tasks is failed.", zap.Error(err))
+//		}
+//		return s
+//	}
+//	return nil
+//}
 
 func initRpcServer() (*RpcServer.Server, error) {
 	var server *RpcServer.Server
@@ -303,7 +334,7 @@ func main() {
 	logger = helper.NewAdapterLogger(config.LogPath+"/ntleader.log", config.LogSize, config.LogMaxAge, config.LogLevel).Logger
 
 	defer logger.Sync()
-	ServerMac = initMachinery()
+	initYTask()
 
 	if _, err := initRpcServer(); err != nil {
 		logger.Fatal("Error", zap.Error(err))

@@ -12,6 +12,7 @@ const (
 	ESBRequestFunction    = "RequestFunc"
 	JWTSecretKey          = "30495887dfgkjhbhj&*(*()@#$*&xmh/.d,/,."
 	RPCEtcdRegisteredPath = "/NT_ESB_Core"
+	ESBCaller = "ESB.TaskCaller"
 )
 
 type Work interface {
@@ -19,7 +20,7 @@ type Work interface {
 	//所以这里使用Init来恢复默认状态(重新初始化)
 	Init()
 	Parse(interface{}) error
-	Do(context.Context) (interface{}, error)
+	Do(ctx context.Context) (interface{}, error)
 }
 
 var (
@@ -28,9 +29,9 @@ var (
 )
 
 type ESBRequest struct {
-	ID        int64       `json:"-"` //snowflake id
-	Topic     string      `json:"-"` //所属Topic
-	TimeStamp time.Time   `json:"-"`
+	ID        int64       //snowflake id
+	Topic     string       //所属Topic
+	TimeStamp time.Time
 	Token     string      `json:"token,omitempty"`   //jwt token
 	Extends   interface{} `json:"extends,omitempty"` //预留扩展
 	Payload    interface{}      `json:"payload,omitempty"`  // 请求参数,用json表示
