@@ -307,8 +307,9 @@ func onMsgReceived(client MQTT.Client, message MQTT.Message) {
 				zap.String("Topic", message.Topic()),
 				zap.Error(err))
 		} else {
-			if res.IsError() != nil {
-				logger.Error("Response is error", zap.Error(res.IsError()))
+			if err=res.AsError();err!=nil {
+				err = errors.New(res.ErrMsg)
+				logger.Error("Response is error", zap.Error(err))
 			} else {
 				logger.Debug("Call result is ", zap.Int64("RequestID", id), zap.Any("Response", res))
 			}
@@ -436,8 +437,8 @@ func (u AccessEnter) EDIRequest_v1(request *restful.Request, response *restful.R
 					zap.String("Topic", req.Topic),
 					zap.Error(err))
 			} else {
-				if res.IsError() != nil {
-					logger.Error("Response is error", zap.Error(res.IsError()))
+				if err = res.AsError(); err != nil {
+					logger.Error("Response is error", zap.Error(err))
 				} else {
 					logger.Debug("Call result is ", zap.Int64("RequestID", req.ID), zap.Any("Response", res))
 				}

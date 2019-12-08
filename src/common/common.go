@@ -44,7 +44,7 @@ type ESBResponse struct {
 	Topic     string      `json:"topic"`
 	Tag       string      `json:"tag"`
 	TimeStamp time.Time   `json:"timeStamp"`
-	err       error       `json:"-"`                //逻辑错误,非技术性調用錯誤
+	//err       error       `json:"-"`                //逻辑错误,非技术性調用錯誤
 	ErrNo     int         `json:"errNo"`            //编号
 	ErrMsg    string      `json:"errMsg,omitempty"` //or序列化不进去?
 	Result    interface{} `json:"result"`           //结果
@@ -68,14 +68,18 @@ func (req *ESBRequest) Marshal() ([]byte, error) {
 }
 
 func (res *ESBResponse) Marshal() ([]byte, error) {
-	if res.err != nil && res.ErrMsg == "" {
-		res.ErrMsg = res.err.Error()
-	}
 	if b, err := json.Marshal(res); err != nil {
 		return nil, err
 	} else {
 		return b, nil
 	}
+}
+
+func (res* ESBResponse) AsError() error{
+	if res.ErrMsg!=""{
+		return errors.New(res.ErrMsg)
+	}
+	return nil
 }
 
 //会清空内容
@@ -86,15 +90,10 @@ func (res *ESBResponse) Unmarshal(data []byte) error {
 	return nil
 }
 
-func (res *ESBResponse) IsError() error {
-	return res.err
-}
-
 func (res *ESBResponse) SetError(req *ESBRequest, err error) {
 	res.TimeStamp = time.Now()
 	res.ID = req.ID
 	res.Topic = req.Topic
-	res.err = err
 	res.ErrNo = -1
 	res.Tag = req.Tag
 	res.Result = nil
@@ -108,7 +107,6 @@ func (res *ESBResponse) AssignForRes(r *ESBResponse, result interface{}) *ESBRes
 	res.ID = r.ID
 	res.Topic = r.Topic
 	res.Tag = r.Tag
-	res.err = nil
 	res.ErrMsg = ""
 	res.ErrNo = 0
 	res.Result = result
@@ -120,7 +118,6 @@ func (res *ESBResponse) AssignForReq(r *ESBRequest, result interface{}) *ESBResp
 	res.ID = r.ID
 	res.Topic = r.Topic
 	res.Tag = r.Tag
-	res.err = nil
 	res.ErrMsg = ""
 	res.ErrNo = 0
 	res.Result = result

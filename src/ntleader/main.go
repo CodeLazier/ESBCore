@@ -122,10 +122,7 @@ func rpcCallback(ctx context.Context, req *NTCommon.ESBRequest, res *NTCommon.ES
 		if err != nil {
 			logger.Error("Call is error.", zap.Error(err))
 			res.SetError(req, err)
-		} else  {
-			if r.ErrMsg != "" {
-				logger.Debug("Response is error.", zap.Error(errors.New(r.ErrMsg)))
-			}
+		} else {
 			//注意,保持res指针地址,不要覆盖
 			*res = *r //res.AssignForRes(r, r.Result)
 		}
@@ -147,14 +144,20 @@ func sendTask(req *NTCommon.ESBRequest) (*NTCommon.ESBResponse, error) {
 
 	if taskId, err := TaskClient.SetTaskCtl(TaskClient.RetryCount, 1).Send(NTCommon.ESBCaller, "MainEnter", req); err == nil {
 		//waiting result
-		if result, err := TaskClient.GetResult(taskId, 2*time.Hour, 3*time.Millisecond); err == nil {
-			var resStr string
+		if result, err := TaskClient.GetResult(taskId, 2*time.Hour, 30*time.Millisecond); err == nil {
 			if result.IsSuccess() {
-				if err := result.Get(0, &resStr); err != nil {
+				if resJson,err := result.GetString(0); err != nil {
 					return nil, err
 				} else {
+					if resJson==""{
+						if errStr,err:=result.GetString(1);err!=nil{
+							return nil,err
+						}else {
+							return nil, errors.New(errStr)
+						}
+					}
 					res := &NTCommon.ESBResponse{}
-					if err = res.Unmarshal([]byte(resStr)); err != nil {
+					if err = res.Unmarshal([]byte(resJson)); err != nil {
 						return nil, err
 					} else {
 						return res, nil

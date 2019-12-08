@@ -3,7 +3,6 @@ package work
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	. "common"
 	//========================
@@ -28,7 +27,8 @@ type CmdQueue struct {
 	WaitTimeout     int    `yaml:"waitTimeout"`
 }
 
-func MainEnter(req *ESBRequest) string {
+//return resJson,errStr
+func MainEnter(req *ESBRequest) (string,string) {
 	//impl
 	var result interface{}
 	var err error
@@ -46,31 +46,31 @@ func MainEnter(req *ESBRequest) string {
 	} else {
 		err = NoImplFunError
 	}
-	//marshal
-	resJson, err2 := res.AssignForReq(req, result).Marshal()
-	if err2 != nil {
-		fmt.Println("Marshal response is faild", err2)
-	} else if err != nil {
-		//second
-		res.ErrMsg = err.Error()
-		if resJson, err2 = res.Marshal(); err2 != nil {
-			fmt.Println("Marshal response is faild at second", err2)
-		}
+
+	if err!=nil{
+		return "",err.Error()
 	}
 
-	return string(resJson)
+	//marshal
+	resJson, err := res.AssignForReq(req, result).Marshal()
+	if err != nil {
+		return "",err.Error()
+	}
+
+	return string(resJson),""
 }
 
 func MainEnterDirect(ctx context.Context, req *ESBRequest) (*ESBResponse, error) {
-	resJson := MainEnter(req)
+	resJson, errStr:= MainEnter(req)
+	if errStr!=""{
+		return nil,errors.New(errStr)
+	}
+
 	res := &ESBResponse{}
 	if err := res.Unmarshal([]byte(resJson)); err != nil {
 		return nil, err
 	}
 
-	if res.ErrMsg!=""{
-		return nil, errors.New(res.ErrMsg)
-	}
 	return res,nil
 }
 
