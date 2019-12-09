@@ -7,6 +7,8 @@ import (
 	"common/task/log"
 	"common/task/message"
 	"common/task/util"
+	"go.uber.org/zap"
+
 	"reflect"
 )
 
@@ -68,7 +70,7 @@ func runFunc(f interface{}, ctl *controller.TaskCtl, funcArgs []string, result *
 		if len(funcOut) > 0 {
 			re, err2 := util.GoValuesToYJsonSlice(funcOut)
 			if err2 != nil {
-				log.TaskLog.Error(err2)
+				log.TaskLog.Error("Error:",zap.Error(err2))
 			} else {
 				result.FuncReturn = re
 			}

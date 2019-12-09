@@ -1,16 +1,17 @@
 package server
 
 import (
+	"sync"
+
 	"common/task/log"
 	"common/task/message"
 	"common/task/worker"
 	"common/task/yerrors"
-	"sync"
+	"go.uber.org/zap"
 )
 
 // get next message if worker is ready
 func (t *Server) GetNextMessageGoroutine(groupName string) {
-	log.TaskLog.WithField("goroutine", "GetNextMessage").Debug("start")
 	var msg message.Message
 	var err error
 	for range t.workerReadyChan {
@@ -24,23 +25,20 @@ func (t *Server) GetNextMessageGoroutine(groupName string) {
 			go t.MakeWorkerReady()
 			TaskErr, ok := err.(yerrors.TaskError)
 			if ok && TaskErr.Type() != yerrors.ErrTypeEmptyQuery {
-				log.TaskLog.WithField("goroutine", "GetNextMessage").Error("get msg error, ", err)
+				log.TaskLog.Error("get msg error, ",zap.Error(err))
 			}
 			continue
 		}
-		log.TaskLog.WithField("goroutine", "GetNextMessage").Infof("new msg %+v", msg)
+		log.TaskLog.Info("",zap.Any("new msg",msg))
 		t.msgChan <- msg
 	}
 
 	t.getMessageGoroutineStopChan <- struct{}{}
-	log.TaskLog.WithField("goroutine", "GetNextMessage").Debug("stop")
 
 }
 
 // start worker to run
 func (t *Server) WorkerGoroutine(groupName string) {
-	log.TaskLog.WithField("goroutine", "worker").Debug("start")
-
 	workerMap, _ := t.workerGroup[groupName]
 	waitWorkerWG := sync.WaitGroup{}
 
@@ -49,7 +47,7 @@ func (t *Server) WorkerGoroutine(groupName string) {
 			defer func() {
 				e := recover()
 				if e != nil {
-					log.TaskLog.WithField("goroutine", "worker").Errorf("run worker[%s] panic %v", msg.WorkerName, e)
+					log.TaskLog.Error("run worker panic",zap.String("name",msg.WorkerName),zap.Any("e",e))
 				}
 			}()
 
@@ -57,7 +55,7 @@ func (t *Server) WorkerGoroutine(groupName string) {
 
 			w, ok := workerMap[msg.WorkerName]
 			if !ok {
-				log.TaskLog.WithField("goroutine", "worker").Error("not found worker", msg.WorkerName)
+				log.TaskLog.Error("not found worker",zap.String("name",msg.WorkerName))
 				return
 			}
 
@@ -69,8 +67,7 @@ func (t *Server) WorkerGoroutine(groupName string) {
 				if yerrors.IsEqual(err, yerrors.ErrTypeNilResult) {
 					result = message.NewResult(msg.Id)
 				} else {
-					log.TaskLog.WithField("goroutine", "worker").
-						Error("get result error ", err)
+					log.TaskLog.Error("get result error ", zap.Error(err))
 					result = message.NewResult(msg.Id)
 				}
 			}
@@ -82,8 +79,6 @@ func (t *Server) WorkerGoroutine(groupName string) {
 
 	waitWorkerWG.Wait()
 	t.workerGoroutineStopChan <- struct{}{}
-	log.TaskLog.WithField("goroutine", "worker").Debug("stop")
-
 }
 
 func (t *Server) workerGoroutine_RunWorker(w worker.WorkerInterface, msg *message.Message, result *message.Result) {
@@ -102,13 +97,13 @@ RUN:
 
 		return
 	}
-	log.TaskLog.WithField("goroutine", "worker").Errorf("run worker[%s] error %s", msg.WorkerName, err)
+	log.TaskLog.Error("run worker[%s] error %s",zap.String("name",msg.WorkerName),zap.Error(err))
 
 	if ctl.CanRetry() {
 		result.Status = message.ResultStatus.WaitingRetry
 		ctl.RetryCount -= 1
 		msg.TaskCtl = ctl
-		log.TaskLog.WithField("goroutine", "worker").Infof("retry task %s", msg)
+		log.TaskLog.Info("retry task ",zap.Any("value",msg))
 		ctl.SetError(nil)
 
 		goto RUN
@@ -121,10 +116,9 @@ RUN:
 }
 
 func (t *Server) workerGoroutine_SaveResult(result message.Result) {
-	log.TaskLog.WithField("goroutine", "worker").
-		Debugf("save result %+v", result)
+	log.TaskLog.Debug("save result",zap.Any("Value", result))
 	err := t.SetResult(result)
 	if err != nil {
-		log.TaskLog.WithField("goroutine", "worker").Errorf("save result error ", err)
+		log.TaskLog.Error("save result error ",zap.Error(err))
 	}
 }

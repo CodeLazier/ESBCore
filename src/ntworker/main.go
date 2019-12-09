@@ -15,6 +15,7 @@ import (
 
 	. "common"
 	"common/helper"
+	"common/task/log"
 	"common/work"
 )
 
@@ -142,6 +143,8 @@ func main() {
 
 	readConfigFile()
 	logger = helper.NewAdapterLogger(config.LogPath+"/ntworker.log", config.LogSize, config.LogMaxAge, config.LogLevel).Logger
+	log.TaskLog=logger
+	defer logger.Sync()
 
 	initTaskServer()
 

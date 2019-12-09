@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	MLog "github.com/RichardKnop/machinery/v1/log"
 	RpcLog "github.com/smallnest/rpcx/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -56,7 +55,6 @@ func initLogger(fileName string, size, age, level int) *zap.Logger {
 func NewAdapterLogger(fileName string, size, age, level int) *AdapterLogger {
 	ad := &AdapterLogger{}
 	ad.Logger = initLogger(fileName, size, age, level)
-	MLog.Set(ad)
 	RpcLog.SetLogger(ad)
 	return ad
 }

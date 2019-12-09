@@ -17,6 +17,7 @@ import (
 
 	NTCommon "common"
 	"common/helper"
+	"common/task/log"
 	"common/work"
 	"go.uber.org/zap"
 
@@ -350,8 +351,9 @@ func main() {
 	readConfigFile()
 
 	logger = helper.NewAdapterLogger(config.LogPath+"/ntleader.log", config.LogSize, config.LogMaxAge, config.LogLevel).Logger
-
+	log.TaskLog=logger
 	defer logger.Sync()
+
 	initTaskServer()
 
 	if _, err := initRpcServer(); err != nil {

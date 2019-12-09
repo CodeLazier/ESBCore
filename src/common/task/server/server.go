@@ -10,7 +10,8 @@ import (
 	"common/task/log"
 	"common/task/message"
 	"common/task/worker"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
+
 	"reflect"
 	"sync"
 )
@@ -42,9 +43,6 @@ type Server struct {
 func NewServer(c config.Config) Server {
 
 	g := make(map[string]workerMap)
-	if c.Debug {
-		log.TaskLog.SetLevel(logrus.DebugLevel)
-	}
 	return Server{
 		workerGroup:   g,
 		broker:        c.Broker,
@@ -91,7 +89,7 @@ func (t *Server) Run(groupName string, numWorkers int) {
 		t.backend.Activate()
 	}
 
-	log.TaskLog.Infof("Start group[%s] numWorkers=%d", groupName, numWorkers)
+	log.TaskLog.Info("Start",zap.String("group", groupName),zap.Int("numWorkers", numWorkers))
 
 	log.TaskLog.Info("group workers:")
 	for name := range workerMap {

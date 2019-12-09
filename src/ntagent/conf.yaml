@@ -62,7 +62,7 @@ General:
   Log:
     path: ./log
     #single log file max size(M),0 is Infinity size until fill disk
-    size: 100
+    size: 10
     #maximum number of days to retain old log files based on the timestamp encoded in their filename
     #0 is preserve forever
     saveDays: 200
