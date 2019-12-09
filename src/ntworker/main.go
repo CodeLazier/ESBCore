@@ -9,32 +9,32 @@ import (
 	"sync"
 	"syscall"
 
-	NTCommon "common"
-	YServer "github.com/gojuukaze/YTask/v2/server"
+	TServer "common/task/server"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
 
+	. "common"
 	"common/helper"
 	"common/work"
 )
 
 var (
-	logger *zap.Logger
-	config = &Config{}
-	R      = sync.Mutex{}
-	TaskServer *YServer.Server
+	logger     *zap.Logger
+	config     = &Config{}
+	R          = sync.Mutex{}
+	TaskServer *TServer.Server
 )
 
 type Worker struct {
 	Concurrency int    `yaml:"concurrency"`
-	Tag         string `yaml:"tag"`
+	Names       string `yaml:"names"`
 }
 
 type General struct {
 	helper.LogParams `yaml:"Log"`
 	work.CmdQueue    `yaml:"CmdQueue"`
 	Worker           `yaml:"Worker"`
-	Caller			`yaml:"Caller"`
+	Caller           `yaml:"Caller"`
 }
 
 type Config struct {
@@ -43,7 +43,6 @@ type Config struct {
 
 type Caller struct {
 	TLS string `yaml:"TLS"`
-
 }
 
 func readConfigFile() bool {
@@ -61,18 +60,18 @@ func readConfigFile() bool {
 		return false
 	}
 
-	return work.LoadAllCfg(content)==nil
+	return work.LoadAllCfg(content) == nil
 }
 
-func initYTask(){
+func initTaskServer() {
 	broker := work.NewTaskBroker("127.0.0.1", "6379", "", 0, 0)
 	backend := work.NewTaskBackend("127.0.0.1", "6379", "", 0, 0)
 
-	TaskServer = work.InitTaskServer(broker,backend,-1,-1)
-	TaskServer.Add(NTCommon.ESBCaller, "MainEnter", work.MainEnter)
-	TaskServer.Run(NTCommon.ESBCaller, 1)
-}
+	TaskServer = work.InitTaskServer(broker, backend, -1, -1)
+	TaskServer.Add(ESBTaskGroupName+config.Worker.Names, ESBTaskFuncName, work.MainEnter)
+	TaskServer.Run(ESBTaskGroupName+config.Worker.Names, 1)
 
+}
 
 //func initMachinery() *machinery.Worker {
 //
@@ -144,8 +143,7 @@ func main() {
 	readConfigFile()
 	logger = helper.NewAdapterLogger(config.LogPath+"/ntworker.log", config.LogSize, config.LogMaxAge, config.LogLevel).Logger
 
-	//initMachinery()
-	initYTask()
+	initTaskServer()
 
 	<-chanSignal
 	TaskServer.Shutdown(context.Background())

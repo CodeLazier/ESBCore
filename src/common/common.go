@@ -12,7 +12,8 @@ const (
 	ESBRequestFunction    = "RequestFunc"
 	JWTSecretKey          = "30495887dfgkjhbhj&*(*()@#$*&xmh/.d,/,."
 	RPCEtcdRegisteredPath = "/NT_ESB_Core"
-	ESBCaller = "ESB.TaskCaller"
+	ESBTaskGroupName = "Caller."
+	ESBTaskFuncName ="MainEnter"
 )
 
 type Work interface {

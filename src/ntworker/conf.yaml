@@ -19,9 +19,9 @@ General:
     resultsExpireIn: 1
   Worker:
     #並行執行數
-    concurrency: 3
-    #當前Tag
-    tag: NT_Worker
+    concurrency: 1
+    #指定處理的Worker name
+    names: NT_Worker
 
   #調用外部接口規範
   Caller:

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"os"
 	"os/signal"
@@ -19,7 +20,7 @@ import (
 	"common/work"
 	"go.uber.org/zap"
 
-	YServer "github.com/gojuukaze/YTask/v2/server"
+	YServer "common/task/server"
 
 	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/rcrowley/go-metrics"
@@ -69,7 +70,7 @@ type Caller struct {
 }
 
 type Leader struct {
-	Tag string `yaml:"tag"`
+	Names []string `yaml:"names"`
 }
 
 func startMetrics() {
@@ -141,8 +142,18 @@ func rpcCallback(ctx context.Context, req *NTCommon.ESBRequest, res *NTCommon.ES
 
 func sendTask(req *NTCommon.ESBRequest) (*NTCommon.ESBResponse, error) {
 	var err error
-
-	if taskId, err := TaskClient.SetTaskCtl(TaskClient.RetryCount, 1).Send(NTCommon.ESBCaller, "MainEnter", req); err == nil {
+	//目前僅支持隨機算法
+	var nw string
+	nc:=len(config.Names)
+	if nc<=0{
+		return nil,errors.New("Task worker name is null")
+	}else if nc==1{
+		nw=config.Names[0]
+	}else {
+		nw = config.Names[rand.Intn(nc)]
+	}
+	//if taskId, err := TaskClient.SetTaskCtl(TaskClient.RetryCount, 0).Send(nw, "MainEnter", req); err == nil {
+	if taskId, err := TaskClient.Send(NTCommon.ESBTaskGroupName+nw, NTCommon.ESBTaskFuncName, req); err == nil {
 		//waiting result
 		if result, err := TaskClient.GetResult(taskId, 2*time.Hour, 30*time.Millisecond); err == nil {
 			if result.IsSuccess() {
@@ -236,14 +247,17 @@ func sendTask(req *NTCommon.ESBRequest) (*NTCommon.ESBResponse, error) {
 //	}
 //}
 
-func initYTask() {
-	// 对于client你需要设置poolSize
+func initTaskServer() {
 	broker := work.NewTaskBroker("127.0.0.1", "6379", "", 0, 10)
 	backend := work.NewTaskBackend("127.0.0.1", "6379", "", 0, 10)
 
 	TaskServer = work.InitTaskServer(broker, backend, -1, -1)
 	_c := TaskServer.GetClient()
 	TaskClient = &_c
+
+	for _,nw:=range config.Leader.Names {
+		TaskServer.Add(NTCommon.ESBTaskGroupName, nw, work.MainEnter)
+	}
 }
 
 //func initMachinery() *machinery.Server {
@@ -332,12 +346,13 @@ func main() {
 	chanSignal := make(chan os.Signal, 1)
 	signal.Notify(chanSignal, os.Interrupt, syscall.SIGTERM)
 
+	rand.Seed(time.Now().UnixNano())
 	readConfigFile()
 
 	logger = helper.NewAdapterLogger(config.LogPath+"/ntleader.log", config.LogSize, config.LogMaxAge, config.LogLevel).Logger
 
 	defer logger.Sync()
-	initYTask()
+	initTaskServer()
 
 	if _, err := initRpcServer(); err != nil {
 		logger.Fatal("Error", zap.Error(err))

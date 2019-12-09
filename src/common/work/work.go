@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	. "common"
+	"common/task/controller"
+
 	//========================
 	//register
 	_ "common/work/calc"
@@ -28,8 +30,11 @@ type CmdQueue struct {
 }
 
 //return resJson,errStr
-func MainEnter(req *ESBRequest) (string,string) {
-	//impl
+func MainEnter(ctl *controller.TaskCtl,req *ESBRequest) (string,string) {
+	if ctl!=nil {
+		ctl.SetRetryCount(0) //禁用重試
+		//impl
+	}
 	var result interface{}
 	var err error
 	res := &ESBResponse{}
@@ -61,7 +66,7 @@ func MainEnter(req *ESBRequest) (string,string) {
 }
 
 func MainEnterDirect(ctx context.Context, req *ESBRequest) (*ESBResponse, error) {
-	resJson, errStr:= MainEnter(req)
+	resJson, errStr:= MainEnter(nil,req)
 	if errStr!=""{
 		return nil,errors.New(errStr)
 	}
