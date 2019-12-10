@@ -22,16 +22,34 @@ func LoadAllCfg(content []byte) error {
 	return err
 }
 
-type CmdQueue struct {
-	Broker          string `yaml:"broker"`
-	Backend         string `yaml:"backend"`
-	ResultsExpireIn int    `yaml:"resultsExpireIn"`
-	WaitTimeout     int    `yaml:"waitTimeout"`
+type Broker struct {
+	Addr     string `yaml:"addr"`
+	Port     string `yaml:"port"`
+	Password string `yaml:"password"`
+	DbNum    int    `yaml:"dbNum"`
+	Pool     int    `yaml:"pool"`
+	TTL      int    `yaml:"ttl"`
+}
+
+type Backend struct {
+	Addr          string `yaml:"addr"`
+	Port          string `yaml:"port"`
+	Password      string `yaml:"password"`
+	Wait          int    `yaml:"wait"`
+	CheckInterval int    `yaml:"checkInterval"`
+	DbNum         int    `yaml:"dbNum"`
+	Pool          int    `yaml:"pool"`
+	TTL           int    `yaml:"ttl"`
+}
+
+type TaskQueue struct {
+	Broker  Broker  `yaml:"Broker"`
+	Backend Backend `yaml:"Backend"`
 }
 
 //return resJson,errStr
-func MainEnter(ctl *controller.TaskCtl,req *ESBRequest) (string,string) {
-	if ctl!=nil {
+func MainEnter(ctl *controller.TaskCtl, req *ESBRequest) (string, string) {
+	if ctl != nil {
 		ctl.SetRetryCount(0) //禁用重試
 		//impl
 	}
@@ -52,23 +70,23 @@ func MainEnter(ctl *controller.TaskCtl,req *ESBRequest) (string,string) {
 		err = NoImplFunError
 	}
 
-	if err!=nil{
-		return "",err.Error()
+	if err != nil {
+		return "", err.Error()
 	}
 
 	//marshal
 	resJson, err := res.AssignForReq(req, result).Marshal()
 	if err != nil {
-		return "",err.Error()
+		return "", err.Error()
 	}
 
-	return string(resJson),""
+	return string(resJson), ""
 }
 
 func MainEnterDirect(ctx context.Context, req *ESBRequest) (*ESBResponse, error) {
-	resJson, errStr:= MainEnter(nil,req)
-	if errStr!=""{
-		return nil,errors.New(errStr)
+	resJson, errStr := MainEnter(nil, req)
+	if errStr != "" {
+		return nil, errors.New(errStr)
 	}
 
 	res := &ESBResponse{}
@@ -76,7 +94,7 @@ func MainEnterDirect(ctx context.Context, req *ESBRequest) (*ESBResponse, error)
 		return nil, err
 	}
 
-	return res,nil
+	return res, nil
 }
 
 //TODO Json Marshal/Unmarshal对性能损害较大(reflace),因改用自解析或其他第三方解析库(msgPack?)

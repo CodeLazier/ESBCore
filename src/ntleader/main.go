@@ -40,7 +40,7 @@ var (
 
 type General struct {
 	helper.LogParams `yaml:"Log"`
-	work.CmdQueue    `yaml:"CmdQueue"`
+	work.TaskQueue    `yaml:"TaskQueue"`
 	Leader           `yaml:"Leader"`
 	Caller           `yaml:"Caller"`
 }
@@ -113,7 +113,7 @@ func readConfigFile() bool {
 		return false
 	}
 
-	return true
+	return work.LoadAllCfg(content) == nil
 }
 
 //可重入,不阻塞客户端的后续调用(Client已使用go调用)
@@ -156,7 +156,7 @@ func sendTask(req *NTCommon.ESBRequest) (*NTCommon.ESBResponse, error) {
 	//if taskId, err := TaskClient.SetTaskCtl(TaskClient.RetryCount, 0).Send(nw, "MainEnter", req); err == nil {
 	if taskId, err := TaskClient.Send(NTCommon.ESBTaskGroupName+nw, NTCommon.ESBTaskFuncName, req); err == nil {
 		//waiting result
-		if result, err := TaskClient.GetResult(taskId, 2*time.Hour, 30*time.Millisecond); err == nil {
+		if result, err := TaskClient.GetResult(taskId, time.Duration(config.Backend.Wait) * time.Hour, time.Duration(config.Backend.CheckInterval) * time.Millisecond); err == nil {
 			if result.IsSuccess() {
 				if resJson,err := result.GetString(0); err != nil {
 					return nil, err
@@ -249,10 +249,10 @@ func sendTask(req *NTCommon.ESBRequest) (*NTCommon.ESBResponse, error) {
 //}
 
 func initTaskServer() {
-	broker := work.NewTaskBroker("127.0.0.1", "6379", "", 0, 10)
-	backend := work.NewTaskBackend("127.0.0.1", "6379", "", 0, 10)
+	broker := work.NewTaskBroker(config.Broker.Addr, config.Broker.Port, config.Broker.Password, config.Broker.DbNum, config.Broker.Pool)
+	backend := work.NewTaskBackend(config.Backend.Addr, config.Backend.Port, config.Backend.Password, config.Backend.DbNum, config.Backend.Pool)
 
-	TaskServer = work.InitTaskServer(broker, backend, -1, -1)
+	TaskServer = work.InitTaskServer(broker, backend, config.Broker.TTL, config.Backend.TTL)
 	_c := TaskServer.GetClient()
 	TaskClient = &_c
 

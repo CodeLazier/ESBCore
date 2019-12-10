@@ -9,14 +9,43 @@ General:
     #0 Debug,1 Info,2 Warn,3 Error,4 Panic
     level: 0
 
-  CmdQueue:
-    #支援AMQP,Redis
-    #redis协议地址
-    broker: redis://localhost:6379
-    #持久化后端,支援Redis,Memcache,MongoDB
-    backend: redis://localhost:6379
-    #结果保存在後端的時間
-    resultsExpireIn: 1
+  #保持和ntleader一样
+  TaskQueue:
+    #没特殊说明单位为hour
+    #目前仅支援Redis
+    Broker:
+      addr: localhost
+      port: 6379
+      password:
+      #redis db num
+      dbNum: 0
+      #redis connection pool size 過大占用連接數,過小高并發狀態下容易連接失敗
+      pool: 10
+      #隊列狀態保存,超出時間自動刪除(如果未處理則丟棄).值過長費内存,值過小容易timeout丟失隊列
+      #-1 infinity
+      ttl: 72
+
+    #目前仅支援Redis
+    Backend:
+      addr: localhost
+      port: 6379
+      password:
+      #等待执行结果最大时间,根據可能的最大單個task的任務執行時間進行設置.值過大遇到中途crash的task
+      #占用執行管道,浪費系統資源以及飆高CPU(因爲task已crash,此時的等待無意義),過小遇到執行過長容易timeout
+      #丟失執行結果
+      wait: 24
+      #檢索結果的間隔等待時間,注意單位ms
+      #值過小浪費CPU算力飆高CPU占用率,值過大損失執行效率
+      checkInterval: 30
+      #redis db num
+      dbNum: 0
+      #redis connection pool size 過大占用連接數,過小高并發狀態下容易連接失敗
+      pool: 10
+      #執行完畢的結果保存,超出自動刪除.值過程費内存,值過小遇到超長執行時間work容易丟失結果
+      #-1 infinity
+      ttl: 72
+
+
   Worker:
     #並行執行數
     concurrency: 1

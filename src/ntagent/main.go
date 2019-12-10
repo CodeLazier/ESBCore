@@ -430,7 +430,6 @@ func (u AccessEnter) EDIRequest_v1(request *restful.Request, response *restful.R
 		} else {
 			//init
 			req.TimeStamp, req.Topic, req.ID = time.Now(), "NT/EDI/", fastid.CommonConfig.GenInt64ID()
-
 			res, err := callRpcServer(req, 0)
 			if err != nil {
 				logger.Error("Call RPC Server is Failed", zap.Int64("ID", req.ID),

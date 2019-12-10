@@ -33,7 +33,7 @@ type Worker struct {
 
 type General struct {
 	helper.LogParams `yaml:"Log"`
-	work.CmdQueue    `yaml:"CmdQueue"`
+	work.TaskQueue   `yaml:"TaskQueue"`
 	Worker           `yaml:"Worker"`
 	Caller           `yaml:"Caller"`
 }
@@ -65,12 +65,12 @@ func readConfigFile() bool {
 }
 
 func initTaskServer() {
-	broker := work.NewTaskBroker("127.0.0.1", "6379", "", 0, 0)
-	backend := work.NewTaskBackend("127.0.0.1", "6379", "", 0, 0)
+	broker := work.NewTaskBroker(config.Broker.Addr, config.Broker.Port, config.Broker.Password, config.Broker.DbNum, 0)
+	backend := work.NewTaskBackend(config.Backend.Addr, config.Backend.Port, config.Backend.Password, config.Backend.DbNum,0)
 
-	TaskServer = work.InitTaskServer(broker, backend, -1, -1)
+	TaskServer = work.InitTaskServer(broker, backend, config.Broker.TTL, config.Backend.TTL)
 	TaskServer.Add(ESBTaskGroupName+config.Worker.Names, ESBTaskFuncName, work.MainEnter)
-	TaskServer.Run(ESBTaskGroupName+config.Worker.Names, 1)
+	TaskServer.Run(ESBTaskGroupName+config.Worker.Names, config.Worker.Concurrency)
 
 }
 
@@ -143,7 +143,7 @@ func main() {
 
 	readConfigFile()
 	logger = helper.NewAdapterLogger(config.LogPath+"/ntworker.log", config.LogSize, config.LogMaxAge, config.LogLevel).Logger
-	log.TaskLog=logger
+	log.TaskLog = logger
 	defer logger.Sync()
 
 	initTaskServer()

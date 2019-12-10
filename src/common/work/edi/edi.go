@@ -3,6 +3,7 @@ package edi
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	. "common"
 	"common/helper"
@@ -12,6 +13,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+var (
+	GlobalGrpcOptions grpc.DialOption
+	ConnPool sync.Map
+)
 type _configs struct {
 	A struct {
 		B struct {
@@ -48,10 +53,35 @@ func init() {
 	} {
 		RegisterWorkMap[v] = p //同一指针地址,节省内存,提高效率
 	}
+
+	if helper.IsExists(configs.GRPC_CertFile) {
+		cred, err := credentials.NewClientTLSFromFile("key/server.crt", "")
+		if err != nil {
+			fmt.Println(err)
+		}else {
+			GlobalGrpcOptions = grpc.WithTransportCredentials(cred)
+		}
+	} else {
+		GlobalGrpcOptions = grpc.WithInsecure()
+	}
+
+	//ConnPool=make(map[string]*grpc.ClientConn)
 }
 
 type EDICall struct {
 	Params EDIRequest
+}
+
+func (self *EDICall) GetConn(addr string)(*grpc.ClientConn,error){
+	if c,ok:=ConnPool.Load(addr);ok{
+		return c.(*grpc.ClientConn),nil
+	}
+	if c,err:= grpc.Dial(addr, GlobalGrpcOptions, grpc.WithDisableRetry());err!=nil{
+		return nil,err
+	}else{
+		ConnPool.Store(addr,c)
+		return c,nil
+	}
 }
 
 //此Init非Package Init
@@ -64,28 +94,14 @@ func (self *EDICall) Parse(params interface{}) error {
 }
 
 func (self *EDICall) Do(ctx context.Context) (interface{}, error) {
-	var op grpc.DialOption
-	if helper.IsExists(configs.GRPC_CertFile) {
-		cred, err := credentials.NewClientTLSFromFile("key/server.crt", "")
-		if err != nil {
-			return nil, err
-		}
-		op = grpc.WithTransportCredentials(cred)
-	} else {
-		op = grpc.WithInsecure()
-	}
-
 	//pool?
 	//TODO port Configurable
-	conn, err := grpc.Dial(fmt.Sprintf("%s", configs.GRPC_Server), op, grpc.WithDisableRetry())
+	conn, err := self.GetConn(fmt.Sprintf("%s", configs.GRPC_Server))
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
 
 	client := pb.NewEDICallClient(conn)
-
-
 
 	req := &pb.EDIRequest{
 		Method: self.Params.Method,
